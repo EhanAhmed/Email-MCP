@@ -149,7 +149,7 @@ export const EMAIL_TOOLS: Record<string, Tool> = {
         to: {
           type: "array",
           items: { type: "string" },
-          description: "Array of recipient email addresses"
+          description: "Array of recipient email addresses. Optional when DEFAULT_TO_EMAIL is configured."
         },
         subject: {
           type: "string",
@@ -193,7 +193,7 @@ export const EMAIL_TOOLS: Record<string, Tool> = {
           description: "Array of file attachments"
         }
       },
-      required: ["to", "subject", "body"]
+      required: ["subject", "body"]
     }
   },
 

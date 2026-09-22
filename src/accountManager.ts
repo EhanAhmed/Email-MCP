@@ -70,9 +70,6 @@ function validateAccount(accountName: string, account: EmailAccount): void {
   if (!account.smtp_host) missingFields.push('smtp.host');
   if (!account.smtp_user) missingFields.push('smtp.user');
   if (!account.smtp_pass) missingFields.push('smtp.password');
-  if (!account.imap_host) missingFields.push('imap.host');
-  if (!account.imap_user) missingFields.push('imap.user');
-  if (!account.imap_pass) missingFields.push('imap.password');
   if (missingFields.length > 0) {
     throw new Error(`Account "${accountName}" is missing required fields: ${missingFields.join(', ')}`);
   }
@@ -141,9 +138,6 @@ export function loadAccounts(): EmailAccounts {
   if (!singleAccount.smtp_host) missingFields.push('SMTP_HOST');
   if (!singleAccount.smtp_user) missingFields.push('SMTP_USER');
   if (!singleAccount.smtp_pass) missingFields.push('SMTP_PASS');
-  if (!singleAccount.imap_host) missingFields.push('IMAP_HOST');
-  if (!singleAccount.imap_user) missingFields.push('IMAP_USER');
-  if (!singleAccount.imap_pass) missingFields.push('IMAP_PASS');
 
   if (missingFields.length > 0) {
     throw new Error(`Missing required email configuration: ${missingFields.join(', ')}. Set EMAIL_ACCOUNTS_JSON or individual environment variables.`);

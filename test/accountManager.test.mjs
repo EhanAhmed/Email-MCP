@@ -76,6 +76,18 @@ test('supports flat environment aliases and comma-separated sender addresses', (
   });
 });
 
+test('allows SMTP-only configuration', () => {
+  withEnvironment({
+    SMTP_HOST: 'smtp.example.test',
+    SMTP_USER: 'owner@test',
+    SMTP_PASS: 'smtp-pass'
+  }, () => {
+    const account = loadAccounts().default;
+    assert.equal(account.smtp_host, 'smtp.example.test');
+    assert.equal(account.imap_host, '');
+  });
+});
+
 test('does not impose an account-count limit', () => {
   const configuredAccounts = Object.fromEntries(
     Array.from({ length: 100 }, (_, index) => [`account-${index + 1}`, {
@@ -99,7 +111,9 @@ test('validates every JSON account and the selected default', () => {
       }
     })
   }, () => {
-    assert.throws(() => loadAccounts(), /Account "incomplete" is missing required fields: imap.host/);
+    const account = loadAccounts().incomplete;
+    assert.equal(account.smtp_user, 'user@test');
+    assert.equal(account.imap_host, '');
   });
 
   withEnvironment({

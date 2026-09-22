@@ -281,7 +281,7 @@ test('runs send, find, modify, reply, and folder tools through local SMTP/IMAP p
   };
   await writeFile(
     environmentFile,
-    `EMAIL_ACCOUNTS_JSON='${JSON.stringify({ local: account }, null, 2)}'\nDEFAULT_EMAIL_ACCOUNT="local"\n`
+    `EMAIL_ACCOUNTS_JSON='${JSON.stringify({ local: account }, null, 2)}'\nDEFAULT_EMAIL_ACCOUNT="local"\nDEFAULT_TO_EMAIL="recipient@example.test"\n`
   );
 
   const transport = new StdioClientTransport({
@@ -301,7 +301,6 @@ test('runs send, find, modify, reply, and folder tools through local SMTP/IMAP p
       name: 'email_send',
       arguments: {
         account_name: 'local',
-        to: ['recipient@example.test'],
         subject: 'MCP SMTP delivery proof',
         body: 'Sent through the actual SMTP transport.',
         body_type: 'plain'

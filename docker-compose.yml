@@ -1,0 +1,9 @@
+services:
+  email-mcp:
+    build:
+      context: .
+    image: email-smtp-imap-mcp:local
+    volumes:
+      - ./.env:/app/.env:ro
+    stdin_open: true
+    tty: false

@@ -195,7 +195,10 @@ export async function handleEmailSend(args: any): Promise<string> {
     args = args || {};
     const { name, config } = getAccount(args.account_name);
 
-    const to = requireStringArray(args.to, 'to');
+    const defaultRecipient = process.env.DEFAULT_TO_EMAIL?.trim();
+    const to = args.to === undefined && defaultRecipient
+      ? [defaultRecipient]
+      : requireStringArray(args.to, 'to');
     const subject = requireString(args.subject, 'subject');
     const body = requireString(args.body, 'body');
     const cc = validateOptionalStringArray(args.cc, 'cc');
