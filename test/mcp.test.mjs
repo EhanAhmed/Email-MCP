@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
@@ -7,6 +8,7 @@ import test from 'node:test';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SMTPServer } from 'smtp-server';
 
 function listen(server) {
@@ -174,6 +176,58 @@ test('serves all tools over stdio and marks failed calls as errors', async () =>
     assert.match(invalidResponseType.content[0].text, /response_type must be reply, reply_all, or forward/);
   } finally {
     await client.close();
+  }
+});
+
+test('serves MCP tools over stateless Streamable HTTP', async () => {
+  const portServer = createServer();
+  const address = await listen(portServer);
+  await close(portServer);
+  const serverPath = path.resolve('build/index.js');
+  const serverProcess = spawn(process.execPath, [serverPath], {
+    env: {
+      PATH: process.env.PATH || '',
+      MCP_TRANSPORT: 'http',
+      MCP_HTTP_PORT: String(address.port),
+      EMAIL_ACCOUNTS_JSON: JSON.stringify({
+        test: {
+          smtp: { host: 'smtp.test', user: 'test@example.com', password: 'test-pass' }
+        }
+      })
+    },
+    stdio: 'ignore'
+  });
+  const client = new Client({ name: 'email-mcp-http-test', version: '1.0.0' });
+  const transport = new StreamableHTTPClientTransport(
+    new URL(`http://127.0.0.1:${address.port}/mcp`)
+  );
+
+  try {
+    let connected = false;
+    for (let attempt = 0; attempt < 50 && !connected; attempt++) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${address.port}/mcp`);
+        connected = response.status === 405;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    assert.equal(connected, true, 'HTTP MCP server should start and accept connections');
+
+    await client.connect(transport);
+    const listed = await client.listTools();
+    assert.deepEqual(
+      listed.tools.map((tool) => tool.name).sort(),
+      ['accounts_list', 'email_respond', 'email_send', 'emails_find', 'emails_modify', 'folders_list']
+    );
+
+    const result = await client.callTool({ name: 'accounts_list', arguments: {} });
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.success, true);
+    assert.equal(payload.accounts[0].name, 'test');
+  } finally {
+    await client.close();
+    serverProcess.kill('SIGTERM');
   }
 });
 

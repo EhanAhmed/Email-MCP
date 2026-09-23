@@ -182,66 +182,38 @@ Run the compiled stdio server with `npm start`. Build a production container wit
 
 ## Docker Compose
 
-The server uses MCP stdio transport, so it does not expose an HTTP port. Create the environment file in the repository root, then build and start the container:
+Compose runs the MCP server over Streamable HTTP so it can stay up as a detached container. This setup expects the external `litellm-langfuse-net` Docker network to exist and LiteLLM to be connected to it.
 
 ```bash
 cp .env.example .env
 # Edit .env and add your SMTP/IMAP account details.
-docker compose up --build
+docker compose up --build -d
 ```
 
-That command keeps the MCP server running with its stdin/stdout attached to the Compose process. To connect an MCP client, configure the client to launch the Compose service as its stdio command instead:
+The server listens on port `8000` inside the Docker network at `/mcp`. The Compose file exposes the port to other containers but does not publish it on the host. It mounts `.env` read-only; do not commit that file because it contains email credentials. Use app-specific passwords where your provider supports them.
 
-```json
-{
-  "mcpServers": {
-    "email": {
-      "command": "docker",
-      "args": [
-        "compose",
-        "-f",
-        "/absolute/path/to/email-smtp-imap-mcp/docker-compose.yml",
-        "run",
-        "--rm",
-        "-T",
-        "email-mcp"
-      ]
-    }
-  }
-}
-```
-
-The Compose file mounts `.env` read-only into the container. Do not commit that file because it contains email credentials. Use app-specific passwords where your provider supports them.
-
-### LiteLLM Proxy with Docker
-
-This server currently uses MCP stdio, so its LiteLLM entry is different from an HTTP server such as Atlassian MCP. Add this under `mcp_servers` in the LiteLLM config:
+Add this to LiteLLM's `config.yaml`:
 
 ```yaml
 mcp_servers:
   email:
-    command: docker
-    args:
-      - compose
-      - -f
-      - /home/ehanhmed/email-smtp-imap-mcp/docker-compose.yml
-      - run
-      - --rm
-      - -T
-      - email-mcp
+    url: http://email-mcp:8000/mcp
+    transport: http
 ```
 
-If LiteLLM runs directly on the host, this is sufficient. If LiteLLM runs in a Docker container, that container must also have access to the Docker daemon and this repository path, for example:
+`email-mcp` is the Compose service name and resolves through Docker DNS on `litellm-langfuse-net`. No Docker socket mount or host port publishing is needed when LiteLLM is on that same network. Restart LiteLLM after changing its config, then verify that `accounts_list` and the other tools appear. Calling `email_send` sends a real message.
 
-```yaml
-services:
-  litellm:
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /home/ehanhmed/email-smtp-imap-mcp:/home/ehanhmed/email-smtp-imap-mcp:ro
+Check the container with `docker compose ps` and `docker compose logs email-mcp`. Keep this endpoint on the trusted Docker network; it does not add HTTP authentication.
+
+### Keep Using Stdio
+
+The server still defaults to stdio for direct Node.js MCP clients. To use this Compose service as a stdio child process instead, override the HTTP setting when invoking it:
+
+```bash
+docker compose run --rm -T -e MCP_TRANSPORT=stdio email-mcp
 ```
 
-The external `litellm-langfuse-net` network is not used for this stdio connection. LiteLLM launches the email container locally and communicates with it through stdin/stdout. The email container still needs normal outbound access to the SMTP provider. After restarting LiteLLM, first verify that `accounts_list` and the other email tools appear; calling `email_send` sends a real message to the configured recipient.
+For LiteLLM stdio mode, configure `command: docker` with arguments `compose`, `-f`, the absolute path to this repository's `docker-compose.yml`, `run`, `--rm`, `-T`, `-e`, `MCP_TRANSPORT=stdio`, and `email-mcp`. In this mode LiteLLM launches the process; do not point its stdio configuration at the already-detached HTTP service.
 
 ### Recreate the Setup on Another System
 
@@ -264,30 +236,18 @@ docker compose build
 docker compose config --quiet
 ```
 
-4. In the LiteLLM `config.yaml`, use the direct Node stdio entry below. Replace both `/home/you/email-smtp-imap-mcp` paths with the absolute path on the new system:
+4. Ensure the external Docker network exists and attach LiteLLM to `litellm-langfuse-net`. The email Compose service uses that network and listens at `email-mcp:8000`.
+
+5. In the LiteLLM `config.yaml`, configure the remote HTTP MCP server:
 
 ```yaml
 mcp_servers:
   email:
-    transport: stdio
-    command: node
-    args:
-      - /home/you/email-smtp-imap-mcp/build/index.js
-    env:
-      EMAIL_ENV_FILE: /home/you/email-smtp-imap-mcp/.env
+    url: http://email-mcp:8000/mcp
+    transport: http
 ```
 
-5. If LiteLLM runs in Docker, mount the repository and its config into the LiteLLM container. The LiteLLM image must contain Node.js; no separate LiteLLM package install is needed:
-
-```yaml
-volumes:
-  - /home/you/email-smtp-imap-mcp:/home/you/email-smtp-imap-mcp:ro
-  - ./config.yaml:/app/config.yaml
-```
-
-6. Reload LiteLLM using the normal deployment procedure. Then use the LiteLLM UI to list tools and confirm that `accounts_list`, `emails_find`, `email_send`, `email_respond`, `emails_modify`, and `folders_list` are visible. Do not call `email_send` during setup verification unless you intend to send a real email.
-
-The `litellm-langfuse-net` network is not required for this stdio MCP connection. The LiteLLM container only needs access to the mounted repository, Node.js, and outbound SMTP networking.
+6. Start the email MCP with `docker compose up --build -d`, then reload LiteLLM using the normal deployment procedure. Confirm that `accounts_list`, `emails_find`, `email_send`, `email_respond`, `emails_modify`, and `folders_list` are visible. Do not call `email_send` during setup verification unless you intend to send a real email.
 
 ## Contributing
 
